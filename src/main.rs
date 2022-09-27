@@ -1,7 +1,9 @@
-use {log::*, url::Url, anyhow::{*, Result}, dotenv};
+use {log::*, url::Url, anyhow::{*, Result}, dotenv, core::str::Lines, std::net::SocketAddr};
 use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpListener,TcpStream}, task};
-use std::net::SocketAddr;
+
 const BUFFER_SIZE: usize = 256;
+
+
 #[tokio::main]
 async fn main() -> Result<()> {
 	env_logger::init();
@@ -21,7 +23,6 @@ async fn main() -> Result<()> {
 	Ok(())
 }
 
-use core::str::Lines;
 fn find_host<'a>(lines: &'a mut Lines) -> Result<&'a str>{
 	while let Some(line) = lines.next() {
 		let mut fields = line.split(':');
@@ -37,8 +38,8 @@ fn find_host<'a>(lines: &'a mut Lines) -> Result<&'a str>{
 }
 
 async fn process_client(mut client_stream: TcpStream, client_addr: SocketAddr) -> Result<()> {
-	let mut buf = [0; BUFFER_SIZE];
-//	let mut buf = Vec::with_capacity(4096);
+
+	let mut buf : [u8; BUFFER_SIZE] = unsafe { std::mem::MaybeUninit::uninit().assume_init() }; 
 
 	let count = client_stream.read(&mut buf).await?;
 	if count == 0 { return Ok(()); }
@@ -77,16 +78,8 @@ async fn process_client(mut client_stream: TcpStream, client_addr: SocketAddr) -
 	if https { client_stream.write_all(b"HTTP/1.1 200 Connection established\r\n\r\n").await?;} 
 	else { server_stream.write_all(&buf[..count]).await?; }
 
-    // Proxying data
-    let (from_client, from_server) =  tokio::io::copy_bidirectional(&mut client_stream, &mut server_stream).await?;
+    tokio::io::copy_bidirectional(&mut client_stream, &mut server_stream).await?;
 
-    // Print message when done
-    debug!(
-        "client wrote {} bytes and received {} bytes",
-        from_client,
-        from_server
-    );
 	Ok(())
-
 }
 

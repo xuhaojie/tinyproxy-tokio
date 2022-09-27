@@ -1,6 +1,7 @@
-use {log::*, url::Url, anyhow::{*, Result}, futures::future::FutureExt, dotenv};
-use tokio::{io::{self, AsyncReadExt},io::{AsyncRead, AsyncWriteExt},io::AsyncWrite,select, spawn, net::{TcpListener,TcpStream}, task};
+use {log::*, url::Url, anyhow::{*, Result}, dotenv};
+use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpListener,TcpStream}, task};
 use std::net::SocketAddr;
+const BUFFER_SIZE: usize = 256;
 #[tokio::main]
 async fn main() -> Result<()> {
 	env_logger::init();
@@ -36,9 +37,7 @@ fn find_host<'a>(lines: &'a mut Lines) -> Result<&'a str>{
 }
 
 async fn process_client(mut client_stream: TcpStream, client_addr: SocketAddr) -> Result<()> {
-	
-	client_stream.readable().await?;
-	let mut buf = [0; 1024];
+	let mut buf = [0; BUFFER_SIZE];
 //	let mut buf = Vec::with_capacity(4096);
 
 	let count = client_stream.read(&mut buf).await?;

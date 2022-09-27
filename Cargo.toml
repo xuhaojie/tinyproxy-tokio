@@ -13,3 +13,13 @@ url = "2.2"
 anyhow = "1.0"
 futures = "0.3"
 dotenv = "0.15"
+
+
+[profile.release]
+#opt-level = 'z'  # Optimize for size
+opt-level = 3  # Optimize for speed
+lto = true
+codegen-units = 1
+#panic = 'abort'
+panic = 'unwind'
+debug = true

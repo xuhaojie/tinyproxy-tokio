@@ -4,7 +4,7 @@ use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpListener,TcpStream}, tas
 const BUFFER_SIZE: usize = 256;
 
 
-#[tokio::main(flavor = "current_thread")]
+#[tokio::main(flavor = "current_thread")] // best benchmark socre, performance much better then go and cpu useage is lower
 //#[tokio::main(flavor = "multi_thread", worker_threads = 10)]
 async fn main() -> Result<()> {
 	env_logger::init();

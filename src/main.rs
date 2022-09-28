@@ -1,18 +1,17 @@
-use {log::*, url::Url, anyhow::{*, Result}, dotenv, core::str::Lines, std::net::SocketAddr};
+use {log::*, url::Url, anyhow::{*, Result}, dotenv, std::net::SocketAddr};
 use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpListener,TcpStream}, task};
 
 const BUFFER_SIZE: usize = 256;
 
-#[tokio::main]
+
+#[tokio::main(flavor = "current_thread")]
+//#[tokio::main(flavor = "multi_thread", worker_threads = 10)]
 async fn main() -> Result<()> {
 	env_logger::init();
 	dotenv::dotenv().ok();
-	let server_address = dotenv::var("SERVER_ADDRESS").unwrap_or("0.0.0.0:8088".to_owned());
-	
+	let server_address = dotenv::var("PROXY_ADDRESS").unwrap_or("0.0.0.0:8088".to_owned());
 	info!("tinyproxy listening on {}", &server_address);
-
 	let server = TcpListener::bind(server_address).await?;
-
 	while let Result::Ok((client_stream, client_addr)) = server.accept().await {
 		task::spawn(async move {
 			match process_client(client_stream, client_addr).await { anyhow::Result::Ok(()) => (), Err(e) => error!("error: {}", e), }
@@ -21,24 +20,8 @@ async fn main() -> Result<()> {
 	Ok(())
 }
 
-fn find_host<'a>(lines: &'a mut Lines) -> Result<&'a str>{
-	while let Some(line) = lines.next() {
-		let mut fields = line.split(':');
-		if let Some(key) = fields.next(){
-			if key == "Host" {
-				if let Some(value) = fields.next() {
-					return Ok(value);
-				}
-			}
-		}
-	}
-	Err(anyhow!("can't find host"))
-}
-
 async fn process_client(mut client_stream: TcpStream, client_addr: SocketAddr) -> Result<()> {
-
 	let mut buf : [u8; BUFFER_SIZE] = unsafe { std::mem::MaybeUninit::uninit().assume_init() }; 
-
 	let count = client_stream.read(&mut buf).await?;
 	if count == 0 { return Ok(()); }
 
@@ -55,15 +38,7 @@ async fn process_client(mut client_stream: TcpStream, client_addr: SocketAddr) -
 			let url =  Url::parse(url_str)?;
 			match url.host() {
 				Some(addr) => (false, format!("{}:{}", addr.to_string(), url.port().unwrap_or(80))),
-				_ => {
-					let host = find_host(&mut lines)?;
-					error!("get host from head {}", host);
-					if host.contains(":") {
-						(false, host.to_string())
-					} else {
-						(false, format!("{}:{}",host,80))
-					}
-				}
+				_ => return Err(anyhow!("can't find host from url")),
 			}
 		}
 	};
@@ -79,4 +54,3 @@ async fn process_client(mut client_stream: TcpStream, client_addr: SocketAddr) -
 
 	Ok(())
 }
-

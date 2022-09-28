@@ -3,19 +3,17 @@ use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpListener,TcpStream}, tas
 
 const BUFFER_SIZE: usize = 256;
 
-
 #[tokio::main]
 async fn main() -> Result<()> {
 	env_logger::init();
 	dotenv::dotenv().ok();
 	let server_address = dotenv::var("SERVER_ADDRESS").unwrap_or("0.0.0.0:8088".to_owned());
 	
-	info!("listening on {}", &server_address);
+	info!("tinyproxy listening on {}", &server_address);
 
 	let server = TcpListener::bind(server_address).await?;
 
 	while let Result::Ok((client_stream, client_addr)) = server.accept().await {
-		debug!("accept client: {}", client_addr);
 		task::spawn(async move {
 			match process_client(client_stream, client_addr).await { anyhow::Result::Ok(()) => (), Err(e) => error!("error: {}", e), }
 		});
@@ -73,7 +71,6 @@ async fn process_client(mut client_stream: TcpStream, client_addr: SocketAddr) -
 	info!("{} -> {}", client_addr.to_string(), line);
 
     let mut server_stream = TcpStream::connect(address).await?;
-
 
 	if https { client_stream.write_all(b"HTTP/1.1 200 Connection established\r\n\r\n").await?;} 
 	else { server_stream.write_all(&buf[..count]).await?; }

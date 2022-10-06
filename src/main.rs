@@ -1,11 +1,11 @@
-use {log::*, url::Url, anyhow::{*, Result}, dotenv, std::net::SocketAddr};
+use {log::*, url::Url, anyhow::{*, Result}, dotenv, std::net::SocketAddr, subslice::SubsliceExt};
 use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpListener,TcpStream}, task};
 
-const BUFFER_SIZE: usize = 256;
+const BUFFER_SIZE: usize = 1024;
 
 
-#[tokio::main(flavor = "current_thread")] // best benchmark socre, performance much better then go and cpu useage is lower
-//#[tokio::main(flavor = "multi_thread", worker_threads = 10)]
+//#[tokio::main(flavor = "current_thread")] // best benchmark socre, performance much better then go and cpu useage is lower
+#[tokio::main(flavor = "multi_thread", worker_threads = 10)]
 async fn main() -> Result<()> {
 	env_logger::init();
 	dotenv::dotenv().ok();
@@ -14,7 +14,10 @@ async fn main() -> Result<()> {
 	let server = TcpListener::bind(server_address).await?;
 	while let Result::Ok((client_stream, client_addr)) = server.accept().await {
 		task::spawn(async move {
-			match process_client(client_stream, client_addr).await { anyhow::Result::Ok(()) => (), Err(e) => error!("error: {}", e), }
+			match process_client(client_stream, client_addr).await {
+				anyhow::Result::Ok(()) => (),
+				Err(e) => error!("error: {}", e),
+			}
 		});
 	}
 	Ok(())
@@ -22,12 +25,25 @@ async fn main() -> Result<()> {
 
 async fn process_client(mut client_stream: TcpStream, client_addr: SocketAddr) -> Result<()> {
 	let mut buf : [u8; BUFFER_SIZE] = unsafe { std::mem::MaybeUninit::uninit().assume_init() }; 
-	let count = client_stream.read(&mut buf).await?;
-	if count == 0 { return Ok(()); }
+	let mut c = 0;
+	let (count, index) = loop {
+		let readed = client_stream.read(&mut buf[c..]).await?;
+		if readed == 0 { return Ok(()); }
+		c += readed;
+		match buf.find(&[13, 10, 13, 10]) {
+			Some(pos) => break (c, pos),
+			None => if c < BUFFER_SIZE { // didn't read full request head yet, read more;
+				error!("not find head end yet, read more");
+				continue;
+			} else{
+				return  Err(anyhow!("read {} bytes, buffer almost full, but can't find end!\n", c));
+			}
+		};
+	};
 
-	let request = String::from_utf8_lossy(&buf);
+	let request = String::from_utf8_lossy(&buf[..index]);
 	let mut lines = request.lines();
-	let line = match lines.next() {Some(l) => l, None => return Err(anyhow!("bad request")) };
+	let line = match lines.next() {Some(l) => l, None => return Err(anyhow!("get request line failed!")) };
 	let mut fields = line.split_whitespace();
 	let method = match fields.next() {Some(m) => m, None => return Err(anyhow!("can't find request method"))};
 	let url_str = match fields.next() {Some(u) =>  u, None => return Err(anyhow!("can't find url"))};
@@ -50,7 +66,7 @@ async fn process_client(mut client_stream: TcpStream, client_addr: SocketAddr) -
 	if https { client_stream.write_all(b"HTTP/1.1 200 Connection established\r\n\r\n").await?;} 
 	else { server_stream.write_all(&buf[..count]).await?; }
 
-    tokio::io::copy_bidirectional(&mut client_stream, &mut server_stream).await?;
+    let _ = tokio::io::copy_bidirectional(&mut client_stream, &mut server_stream).await;
 
 	Ok(())
 }

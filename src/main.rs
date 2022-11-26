@@ -43,10 +43,10 @@ async fn process_client(mut client_stream: TcpStream, client_addr: SocketAddr) -
 
 	let request = String::from_utf8_lossy(&buf[..index]);
 	let mut lines = request.lines();
-	let line = match lines.next() {Some(l) => l, None => return Err(anyhow!("get request line failed!")) };
+	let Some(line) = lines.next() else { return Err(anyhow!("get request line failed!"))};
 	let mut fields = line.split_whitespace();
-	let method = match fields.next() {Some(m) => m, None => return Err(anyhow!("can't find request method"))};
-	let url_str = match fields.next() {Some(u) =>  u, None => return Err(anyhow!("can't find url"))};
+	let Some(method) = fields.next() else { return Err(anyhow!("can't find request method"))};
+	let Some(url_str) = fields.next() else { return Err(anyhow!("can't find url"))};
 
 	let (https, address) = match method {
 		"CONNECT"  => (true, String::from(url_str)),
